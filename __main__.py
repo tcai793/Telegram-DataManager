@@ -22,6 +22,7 @@ if __name__ == '__main__':
         pg.update_line(2, 'Downloading File {:,}/{:,}'.format(recieved, total))
 
     # Start client
+    pg.update_line(0, 'Starting Telegram Client')
     client = TelegramClient(session_name, api_id, api_hash)
     client.start()
 

@@ -4,14 +4,15 @@ import os
 import shutil
 import sys
 from telegram_datamanager.progress import Progress
+import re
 
 
 class Importer:
     def __init__(self, client, root_folder, progress, download_progress_callback):
+        # Set variables
         self._client = client
 
         self._root_folder = root_folder
-        os.makedirs(root_folder, mode=0o755, exist_ok=True)
 
         self._tmp_folder = os.path.join(self._root_folder, 'tmp')
         self._media_folder = os.path.join(self._root_folder, 'media')
@@ -21,8 +22,50 @@ class Importer:
         self._progress = progress
         self._download_progress_callback = download_progress_callback
 
+        # Maintain folder structure and remove useless file
+        self._maintain_structure()
+
         # Check and update personal info
         self.update_personal_info()
+
+    def _remove_file_with_invalid_media_id(self):
+        self._progress.update_line(0, 'Removing media file with invalid id')
+        # Delete all files with media_id larger than media id in the DB
+        for f in os.listdir(self._media_folder):
+            chat_folder = os.path.join(self._media_folder, f)
+            if not os.path.isdir(chat_folder):
+                continue
+            # Convert chat_id to int
+            try:
+                chat_id = int(f)
+            except ValueError:
+                continue
+            # Check if chat_id is a valid chat in DB
+            if not self._db.chat_exist(chat_id):
+                continue
+            # Get max_media_id
+            max_media_id = self._db.get_media_id(chat_id)
+            # Remove all invalid files
+            files_to_remove = []
+            for ff in os.listdir(chat_folder):
+                filepath = os.path.join(chat_folder, ff)
+                if not os.path.isfile(filepath):
+                    continue
+                match = re.fullmatch(r'^([0-9]+)\@.+$', ff)
+                if match and int(match.group(1)) > max_media_id:
+                    files_to_remove.append(filepath)
+            for ff in files_to_remove:
+                os.remove(ff)
+
+    def _maintain_structure(self):
+        os.makedirs(self._root_folder, mode=0o755, exist_ok=True)
+
+        self._remove_file_with_invalid_media_id()
+
+        # Delete and remake tmp dir
+        if os.path.exists(self._tmp_folder):
+            shutil.rmtree(self._tmp_folder)
+        os.makedirs(self._tmp_folder, mode=0o755, exist_ok=True)
 
     def update_personal_info(self):
         self._progress.update_line(0, 'Updating personal info')
@@ -112,10 +155,6 @@ class Importer:
         media_ids['prev'] = media_id
 
     def _save_all_media(self, chat_id, message):
-        # Rebuild tmp folder
-        if os.path.exists(self._tmp_folder):
-            shutil.rmtree(self._tmp_folder)
-        os.makedirs(self._tmp_folder, mode=0o755, exist_ok=True)
         # Create dir for media folder
         curr_chat_folder = os.path.join(self._media_folder, str(chat_id))
         os.makedirs(curr_chat_folder, mode=0o755, exist_ok=True)
