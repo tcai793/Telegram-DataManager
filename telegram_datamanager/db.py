@@ -15,8 +15,7 @@ class DataBase:
 
             # Create tables
             c.execute(''' create table General (
-                version text,
-                media_count integer
+                version text
             )''')
 
             c.execute(''' create table PersonalInfo (
@@ -44,7 +43,8 @@ class DataBase:
                 chat_id integer primary key,
                 name text,
                 type text,
-                max_message_id integer
+                max_message_id integer,
+                media_count integer
             )''')
 
             c.execute(''' create table Message (
@@ -64,13 +64,15 @@ class DataBase:
             )''')
 
             c.execute(''' create table Media (
-                media_id integer primary key,
+                chat_id integer,
+                media_id integer,
                 file text,
-                next_id
+                next_id,
+                primary key (media_id, chat_id)
             )''')
 
             # Init fields
-            c.execute('insert into General values (?,?)', ('V1.0.0', 0))
+            c.execute('insert into General values (?)', ('V1.0.0', ))
 
             conn.commit()
 
@@ -81,23 +83,11 @@ class DataBase:
 
         self._conn = sqlite3.connect(filename)
 
-    def __del__(self):
-        self._conn.close()
-
     def _date_to_str(self, date):
         return date.strftime('%Y-%m-%d %H:%M:%S')
 
     def commit(self):
         self._conn.commit()
-
-    def get_next_media_id(self):
-        c = self._conn.cursor()
-
-        curr_count = c.execute('SELECT media_count from General').fetchone()[0]
-        curr_count += 1
-        c.execute('UPDATE General SET media_count = ?', (curr_count,))
-
-        return curr_count
 
     # Personal Info
     def check_and_update_personal_info(self, user_id, first, last, phone, username):
@@ -141,8 +131,8 @@ class DataBase:
         if self.chat_exist(chat_id):
             raise ValueError('add duplicate chat')
 
-        self._conn.execute('INSERT into Chat VALUES(?,?,?,?)',
-                           (chat_id, name, chat_type, 0))
+        self._conn.execute('INSERT into Chat VALUES(?,?,?,?,?)',
+                           (chat_id, name, chat_type, 0, 0))
 
     def chat_get_max_id(self, chat_id):
         if not self.chat_exist(chat_id):
@@ -153,9 +143,21 @@ class DataBase:
 
     def chat_update_max_id(self, chat_id, max_message_id):
         if not self.chat_exist(chat_id):
-            raise ValueError('chat_update_max_id: chat_id DNS')
+            raise ValueError('chat_update_max_id: chat_id DNE')
 
         self._conn.execute('UPDATE Chat SET max_message_id=? WHERE chat_id=?', (max_message_id, chat_id))
+
+    def get_next_media_id(self, chat_id):
+        if not self.chat_exist(chat_id):
+            raise ValueError('get_next_media_id: chat_id DNE')
+
+        c = self._conn.cursor()
+
+        curr_count = c.execute('SELECT media_count from Chat WHERE chat_id=?', (chat_id,)).fetchone()[0]
+        curr_count += 1
+        c.execute('UPDATE Chat SET media_count = ? WHERE chat_id=?', (curr_count, chat_id))
+
+        return curr_count
 
     # Message
     def message_exist(self, chat_id, message_id):
@@ -179,19 +181,19 @@ class DataBase:
         self._conn.execute('UPDATE Message SET media_id=? WHERE chat_id=? AND message_id=?', (media_id, chat_id, message_id))
 
     # Media
-    def media_exist(self, media_id):
-        if self._conn.execute('SELECT * from Media WHERE media_id=?', (media_id,)).fetchone():
+    def media_exist(self, chat_id, media_id):
+        if self._conn.execute('SELECT * from Media WHERE chat_id=? AND media_id=?', (chat_id, media_id)).fetchone():
             return True
         return False
 
-    def media_add(self, media_id, filepath, next_id=None):
-        if self.media_exist(media_id):
+    def media_add(self, chat_id, media_id, filepath, next_id=None):
+        if self.media_exist(chat_id, media_id):
             raise ValueError('add duplicate media')
 
-        self._conn.execute('INSERT into Media VALUES(?,?,?)', (media_id, filepath, next_id))
+        self._conn.execute('INSERT into Media VALUES(?,?,?,?)', (chat_id, media_id, filepath, next_id))
 
-    def media_update_next(self, media_id, next_id):
-        if not self.media_exist(media_id):
+    def media_update_next(self, chat_id, media_id, next_id):
+        if not self.media_exist(chat_id, media_id):
             raise ValueError('update nonexist media')
 
-        self._conn.execute('UPDATE Media SET next_id=? WHERE media_id=?', (next_id, media_id))
+        self._conn.execute('UPDATE Media SET next_id=? WHERE chat_id=? AND media_id=?', (next_id, chat_id, media_id))

@@ -60,6 +60,7 @@ class Importer:
             for chat in all_chats:
                 if self._match_chat_against_list(chat, white_list):
                     filtered.append(chat)
+        # TODO: currently if no white_list is supplied then no chat is saved
 
         if len(black_list) is not 0:
             for chat in filtered:
@@ -86,43 +87,44 @@ class Importer:
     def _get_actionstr(self, message):
         return type(message.action).__name__ if message.action else None
 
-    def _move_media_file(self, filename, media_ids):
+    def _move_media_file(self, chat_id, filename, media_ids):
         if not filename:
             return
 
         self._progress.update_line(2, 'Saving media file {} '.format(os.path.basename(filename)))
 
         # Allocate media_id
-        media_id = self._db.get_next_media_id()
+        media_id = self._db.get_next_media_id(chat_id)
         # Rename and move file
         filename = os.path.basename(filename)
         new_filename = '{}@{}'.format(media_id, filename)
         old_path = os.path.join(self._tmp_folder, filename)
-        new_path = os.path.join(self._media_folder, new_filename)
+        new_path = os.path.join(self._media_folder, str(chat_id), new_filename)
         os.rename(old_path, new_path)
         # Create Media entry to db
-        self._db.media_add(media_id, new_path)
+        self._db.media_add(chat_id, media_id, new_path)
         # Update previous_entry
         if media_ids['prev'] is not 0:
-            self._db.media_update_next(media_ids['prev'], media_id)
+            self._db.media_update_next(chat_id, media_ids['prev'], media_id)
 
         if media_ids['first'] == 0:
             media_ids['first'] = media_id
         media_ids['prev'] = media_id
 
-    def _save_all_media(self, message):
+    def _save_all_media(self, chat_id, message):
         # Rebuild tmp folder
         if os.path.exists(self._tmp_folder):
             shutil.rmtree(self._tmp_folder)
         os.makedirs(self._tmp_folder, mode=0o755, exist_ok=True)
         # Create dir for media folder
-        os.makedirs(self._media_folder, mode=0o755, exist_ok=True)
+        curr_chat_folder = os.path.join(self._media_folder, str(chat_id))
+        os.makedirs(curr_chat_folder, mode=0o755, exist_ok=True)
 
         # Download everything
         media_ids = {'first': 0, 'prev': 0}
         # Step 1: media in document
         filename = message.download_media(file=self._tmp_folder, progress_callback=self._download_progress_callback)
-        self._move_media_file(filename, media_ids)
+        self._move_media_file(chat_id, filename, media_ids)
 
         if message.web_preview:
             if message.web_preview.cached_page:
@@ -130,13 +132,13 @@ class Importer:
                 if message.web_preview.cached_page.photos:
                     for photo in message.web_preview.cached_page.photos:
                         filename = message.client.download_media(photo, file=self._tmp_folder, progress_callback=self._download_progress_callback)
-                        self._move_media_file(filename, media_ids)
+                        self._move_media_file(chat_id, filename, media_ids)
 
                 # Download all documents
                 if message.web_preview.cached_page.documents:
                     for doc in message.web_preview.cached_page.documents:
                         filename = message.client.download_media(doc, file=self._tmp_folder, progress_callback=self._download_progress_callback)
-                        self._move_media_file(filename, media_ids)
+                        self._move_media_file(chat_id, filename, media_ids)
 
         return media_ids['first'] if media_ids['first'] is not 0 else None
 
@@ -184,7 +186,7 @@ class Importer:
                     fwd_from=message.fwd_from.channel_id if message.fwd_from else None
                 )
                 # Check if media is present, if so, save it
-                media_id = self._save_all_media(message)
+                media_id = self._save_all_media(chat.id, message)
                 if media_id:
                     self._db.message_update_media_id(chat.id, message.id, media_id)
 
