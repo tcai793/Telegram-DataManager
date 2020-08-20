@@ -1,0 +1,47 @@
+General
+    version,
+    media_count integer
+
+PersonalInfo
+    user_id integer,
+    first text,
+    last text,
+    phone text,
+    username text,
+
+ProfilePhoto
+    date text,
+    photo text
+
+Contact
+    user_id integer primary key,
+    first text,
+    last text,
+    phone text,
+    date text
+
+Chat 
+    chat_id integer primary key,
+    name text,
+    type text,
+    max_message_id integer
+
+Message
+    message_id integer,
+    chat_id integer,
+    grouped_id integer,
+    type text,
+    date text,
+    text text,
+
+    edited text,
+    sender_id text,
+    reply_to_message_id integer,
+    fwd_from integer,
+    media_id integer,
+    primary key (message_id, chat_id)
+
+Media
+    media_id integer primary key ,
+    file text,
+    next_id
