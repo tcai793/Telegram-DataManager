@@ -29,3 +29,7 @@ if __name__ == '__main__':
     im = Importer(client, root_folder, pg, download_progress_callback)
 
     im.update_chats(white_list=chat_names)
+
+    pg.update_line(0, 'Finished')
+    pg.update_line(1, '')
+    pg.update_line(2, '')
