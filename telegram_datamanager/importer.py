@@ -7,7 +7,7 @@ import re
 
 
 class Importer:
-    def __init__(self, client, root_folder, display_callback, download_progress_callback):
+    def __init__(self, client, root_folder, display_progress=False, display_callback=None, download_progress_callback=None):
         # Set variables
         self._client = client
 
@@ -18,14 +18,35 @@ class Importer:
 
         self._db = DataBase(os.path.join(root_folder, 'telegram_datamanager.db'))
 
-        self._display_callback = display_callback
-        self._download_progress_callback = download_progress_callback
+        self._display_progress = display_progress
+        self._raw_display_callback = display_callback
+        self._raw_download_progress_callback = download_progress_callback
 
         # Maintain folder structure and remove useless file
         self._maintain_structure()
 
         # Check and update personal info
         self.update_personal_info()
+
+    def enable_progress(self):
+        self._display_progress = True
+
+    def disable_progress(self):
+        self._display_progress = False
+
+    def _display_callback(self, line0=None, line1=None, line2=None):
+        if not self._display_progress:
+            return
+        if not self._raw_display_callback:
+            return
+        self._raw_display_callback(line0, line1, line2)
+
+    def _download_progress_callback(self, recieved_bytes, total_bytes):
+        if not self._display_progress:
+            return
+        if not self._raw_download_progress_callback:
+            return
+        self._raw_download_progress_callback(recieved_bytes, total_bytes)
 
     def _remove_file_with_invalid_media_id(self):
         self._display_callback('Removing media file with invalid id')
@@ -121,7 +142,7 @@ class Importer:
         return 'group'
 
     def _get_undownloaded_message_stat(self, chat_id, max_message_id):
-        self._display_callback(None, 'Updating undownloaded message count')
+        #self._display_callback(None, 'Updating undownloaded message count')
 
         count = 0
         total_bytes = 0
@@ -130,7 +151,7 @@ class Importer:
             count += 1
             total_bytes += self._get_media_size_in_message(message)
 
-            self._display_callback(None, 'Updating undownloaded message count: {:,}. Total file size: {:,}'.format(count, total_bytes))
+            #self._display_callback(None, 'Updating undownloaded message count: {:,}. Total file size: {:,}'.format(count, total_bytes))
 
         self._undownloaded_messages = count
         self._undownloaded_file_bytes = total_bytes
@@ -275,3 +296,26 @@ class Importer:
                 self._db.chat_update_max_id(chat.id, max_message_id)
 
                 self._db.commit()
+
+    def estimate_chats(self, black_list=[], white_list=[]):
+        # Step 1 filter chat
+        filtered_chat = self._get_filtered_chat(black_list, white_list)
+
+        # Counters
+        chat_total = len(filtered_chat)
+        chat_count = 1
+
+        # Save all messages in all chats
+        for chat in filtered_chat:
+            chat_count += 1
+
+            # Get max downloaded message id
+            if self._db.chat_exist(chat.id):
+                max_message_id = self._db.chat_get_max_id(chat.id)
+            else:
+                max_message_id = 0
+
+            # Calculate # of new messages and size of all medias
+            self._get_undownloaded_message_stat(chat.id, max_message_id)
+
+            print('{}/{} {} Messages:{} Size of files:{}'.format(chat_count, chat_total, chat.name, self._undownloaded_messages, self._undownloaded_file_bytes))
