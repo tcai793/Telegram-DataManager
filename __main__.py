@@ -13,10 +13,11 @@ if __name__ == '__main__':
     api_hash = config['api_hash']
     chat_names = config['chat_names']
     root_folder = config['root_folder']
+    db_folder = config['db_folder']
     session_name = config['session_name']
 
     # CLI
-    #pg = Progress(3)
+    pg = Progress(3)
 
     def download_progress_callback(recieved, total):
         pg.update_line(2, 'Downloading File {:,}/{:,}'.format(recieved, total))
@@ -33,7 +34,6 @@ if __name__ == '__main__':
     client = TelegramClient(session_name, api_id, api_hash)
     client.start()
 
-    im = Importer(client, root_folder, False, display_callback, download_progress_callback)
-    im.disable_progress()
+    im = Importer(client, root_folder, db_folder, True, display_callback, download_progress_callback)
 
-    im.estimate_chats(allow_list=chat_names)
+    im.update_chats(allow_list=chat_names)

@@ -7,7 +7,7 @@ import re
 
 
 class Importer:
-    def __init__(self, client, root_folder, display_progress=False, display_callback=None, download_progress_callback=None):
+    def __init__(self, client, root_folder, db_folder, display_progress=False, display_callback=None, download_progress_callback=None):
         # Set variables
         self._client = client
 
@@ -16,7 +16,7 @@ class Importer:
         self._tmp_folder = os.path.join(self._root_folder, 'tmp')
         self._media_folder = os.path.join(self._root_folder, 'media')
 
-        self._db = DataBase(os.path.join(root_folder, 'telegram_datamanager.db'))
+        self._db = DataBase(os.path.join(db_folder, 'telegram_datamanager.db'))
 
         self._display_progress = display_progress
         self._raw_display_callback = display_callback
