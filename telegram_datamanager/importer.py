@@ -3,12 +3,11 @@ from .db import DataBase
 import os
 import shutil
 import sys
-from telegram_datamanager.progress import Progress
 import re
 
 
 class Importer:
-    def __init__(self, client, root_folder, progress, download_progress_callback):
+    def __init__(self, client, root_folder, display_callback, download_progress_callback):
         # Set variables
         self._client = client
 
@@ -19,7 +18,7 @@ class Importer:
 
         self._db = DataBase(os.path.join(root_folder, 'telegram_datamanager.db'))
 
-        self._progress = progress
+        self._display_callback = display_callback
         self._download_progress_callback = download_progress_callback
 
         # Maintain folder structure and remove useless file
@@ -29,7 +28,7 @@ class Importer:
         self.update_personal_info()
 
     def _remove_file_with_invalid_media_id(self):
-        self._progress.update_line(0, 'Removing media file with invalid id')
+        self._display_callback('Removing media file with invalid id')
         # Delete all files with media_id larger than media id in the DB
         for f in os.listdir(self._media_folder):
             chat_folder = os.path.join(self._media_folder, f)
@@ -70,7 +69,7 @@ class Importer:
         os.makedirs(self._tmp_folder, mode=0o755, exist_ok=True)
 
     def update_personal_info(self):
-        self._progress.update_line(0, 'Updating personal info')
+        self._display_callback('Updating personal info')
         me = self._client.get_me()
 
         if not me:
@@ -93,7 +92,7 @@ class Importer:
         return chat.id in compared_list or chat.name in compared_list
 
     def _get_filtered_chat(self, black_list, white_list):
-        self._progress.update_line(1, 'Filtering Chat')
+        self._display_callback(None, 'Filtering Chat')
         # Match policy:
         # if white_list is not empty, remove everything that does not in it
         # if black_list is not empty, remove everything that is in it
@@ -122,7 +121,7 @@ class Importer:
         return 'group'
 
     def _get_undownloaded_message_stat(self, chat_id, max_message_id):
-        self._progress.update_line(1, 'Updating undownloaded message count')
+        self._display_callback(None, 'Updating undownloaded message count')
 
         count = 0
         total_bytes = 0
@@ -131,7 +130,7 @@ class Importer:
             count += 1
             total_bytes += self._get_media_size_in_message(message)
 
-            self._progress.update_line(1, 'Updating undownloaded message count: {:,}. Total file size: {:,}'.format(count, total_bytes))
+            self._display_callback(None, 'Updating undownloaded message count: {:,}. Total file size: {:,}'.format(count, total_bytes))
 
         self._undownloaded_messages = count
         self._undownloaded_file_bytes = total_bytes
@@ -143,7 +142,7 @@ class Importer:
         if not filename:
             return
 
-        self._progress.update_line(2, 'Saving media file {} '.format(os.path.basename(filename)))
+        self._display_callback(None, None, 'Saving media file {} '.format(os.path.basename(filename)))
 
         # Allocate media_id
         media_id = self._db.get_next_media_id(chat_id)
@@ -176,7 +175,8 @@ class Importer:
             webpage = message.media.webpage
             if isinstance(webpage, types.WebPage):
                 if webpage.photo:
-                    total_bytes += webpage.photo.sizes[-1].size
+                    if isinstance(webpage.photo.sizes[-1], types.PhotoSize):
+                        total_bytes += webpage.photo.sizes[-1].size
                 if webpage.document:
                     total_bytes += webpage.document.size
 
@@ -222,7 +222,7 @@ class Importer:
         return media_ids['first'] if media_ids['first'] is not 0 else None
 
     def update_chats(self, black_list=[], white_list=[]):
-        self._progress.update_line(0, 'Updating Chats ...')
+        self._display_callback('Updating Chats ...')
         # Step 1 filter chat
         filtered_chat = self._get_filtered_chat(black_list, white_list)
 
@@ -232,7 +232,7 @@ class Importer:
 
         # Save all messages in all chats
         for chat in filtered_chat:
-            self._progress.update_line(0, 'Updating Chat {} {:,}/{:,}'.format(chat.name, chat_count, chat_total))
+            self._display_callback('Updating Chat {} {:,}/{:,}'.format(chat.name, chat_count, chat_total))
             chat_count += 1
             # Check if chat is in db, if not, create it
             if not self._db.chat_exist(chat.id):
@@ -248,7 +248,7 @@ class Importer:
             count = 1
             # Save all message in this chat
             for message in self._client.iter_messages(chat.id, reverse=True, min_id=max_message_id):
-                self._progress.update_line(1, 'Saving message {:,}/{:,}. Total bytes remaining: {:,}'.format(count, self._undownloaded_messages, self._undownloaded_file_bytes))
+                self._display_callback(None, 'Saving message {:,}/{:,}. Total bytes remaining: {:,}'.format(count, self._undownloaded_messages, self._undownloaded_file_bytes))
                 # TODO: print bytes remaining
                 count += 1
                 # Save one message

@@ -21,12 +21,20 @@ if __name__ == '__main__':
     def download_progress_callback(recieved, total):
         pg.update_line(2, 'Downloading File {:,}/{:,}'.format(recieved, total))
 
+    def display_callback(line0=None, line1=None, line2=None):
+        if line0:
+            pg.update_line(0, line0)
+        if line1:
+            pg.update_line(1, line1)
+        if line2:
+            pg.update_line(2, line2)
+
     # Start client
     pg.update_line(0, 'Starting Telegram Client')
     client = TelegramClient(session_name, api_id, api_hash)
     client.start()
 
-    im = Importer(client, root_folder, pg, download_progress_callback)
+    im = Importer(client, root_folder, display_callback, download_progress_callback)
 
     im.update_chats(white_list=chat_names)
 
