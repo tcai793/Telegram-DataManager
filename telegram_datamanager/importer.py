@@ -112,25 +112,19 @@ class Importer:
     def _match_chat_against_list(self, chat, compared_list):
         return chat.id in compared_list or chat.name in compared_list
 
-    def _get_filtered_chat(self, black_list, white_list):
+    def _get_filtered_chat(self, allow_list):
         self._display_callback(None, 'Filtering Chat')
-        # Match policy:
-        # if white_list is not empty, remove everything that does not in it
-        # if black_list is not empty, remove everything that is in it
         all_chats = self._client.get_dialogs(limit=None)
 
         filtered = []
 
-        if len(white_list) is not 0:
+        if len(allow_list) is not 0:
             for chat in all_chats:
-                if self._match_chat_against_list(chat, white_list):
+                if self._match_chat_against_list(chat, allow_list):
                     filtered.append(chat)
-        # TODO: currently if no white_list is supplied then no chat is saved
-
-        if len(black_list) is not 0:
-            for chat in filtered:
-                if self._match_chat_against_list(chat, black_list):
-                    filtered.remove(chat)
+        else:
+            for chat in all_chats:
+                filtered.append(chat)
 
         return filtered
 
@@ -242,10 +236,10 @@ class Importer:
 
         return media_ids['first'] if media_ids['first'] is not 0 else None
 
-    def update_chats(self, black_list=[], white_list=[]):
+    def update_chats(self, allow_list=[]):
         self._display_callback('Updating Chats ...')
         # Step 1 filter chat
-        filtered_chat = self._get_filtered_chat(black_list, white_list)
+        filtered_chat = self._get_filtered_chat(allow_list)
 
         # Counters
         chat_total = len(filtered_chat)
@@ -297,9 +291,9 @@ class Importer:
 
                 self._db.commit()
 
-    def estimate_chats(self, black_list=[], white_list=[]):
+    def estimate_chats(self,  allow_list=[]):
         # Step 1 filter chat
-        filtered_chat = self._get_filtered_chat(black_list, white_list)
+        filtered_chat = self._get_filtered_chat(allow_list)
 
         # Counters
         chat_total = len(filtered_chat)

@@ -36,4 +36,4 @@ if __name__ == '__main__':
     im = Importer(client, root_folder, False, display_callback, download_progress_callback)
     im.disable_progress()
 
-    im.estimate_chats(white_list=chat_names)
+    im.estimate_chats(allow_list=chat_names)
