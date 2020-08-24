@@ -25,8 +25,11 @@ if __name__ == '__main__':
     def display_callback(line0=None, line1=None, line2=None):
         if line0:
             pg.update_line(0, line0)
+            pg.update_line(1, '')
+            pg.update_line(2, '')
         if line1:
             pg.update_line(1, line1)
+            pg.update_line(2, '')
         if line2:
             pg.update_line(2, line2)
 
