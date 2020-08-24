@@ -110,21 +110,24 @@ class Importer:
         pass
 
     def _match_chat_against_list(self, chat, compared_list):
-        return chat.id in compared_list or chat.name in compared_list
+        return int(chat.id) in compared_list or chat.name in compared_list
 
-    def _get_filtered_chat(self, allow_list):
+    def _get_filtered_chat(self, allow_list=None, block_list=None):
         self._display_callback(None, 'Filtering Chat')
         all_chats = self._client.get_dialogs(limit=None)
 
         filtered = []
 
-        if len(allow_list) is not 0:
+        if allow_list and len(allow_list) is not 0:
             for chat in all_chats:
                 if self._match_chat_against_list(chat, allow_list):
                     filtered.append(chat)
         else:
             for chat in all_chats:
                 filtered.append(chat)
+
+        if block_list and len(block_list) is not 0:
+            filtered = [chat for chat in filtered if not self._match_chat_against_list(chat, block_list)]
 
         return filtered
 
@@ -236,10 +239,10 @@ class Importer:
 
         return media_ids['first'] if media_ids['first'] is not 0 else None
 
-    def update_chats(self, allow_list=[]):
+    def update_chats(self, allow_list=None, block_list=None):
         self._display_callback('Updating Chats ...')
         # Step 1 filter chat
-        filtered_chat = self._get_filtered_chat(allow_list)
+        filtered_chat = self._get_filtered_chat(allow_list, block_list)
 
         # Counters
         chat_total = len(filtered_chat)
@@ -291,13 +294,17 @@ class Importer:
 
                 self._db.commit()
 
-    def estimate_chats(self,  allow_list=[]):
-        # Step 1 filter chat
-        filtered_chat = self._get_filtered_chat(allow_list)
+    def estimate_chats(self,  allow_list=None, block_list=None):
+        # Backup original display settings
+        display_progress_backup = self._display_progress
+        self._display_progress = False
+
+        # filter chat
+        filtered_chat = self._get_filtered_chat(allow_list, block_list)
 
         # Counters
         chat_total = len(filtered_chat)
-        chat_count = 1
+        chat_count = 0
 
         # Save all messages in all chats
         for chat in filtered_chat:
@@ -309,7 +316,40 @@ class Importer:
             else:
                 max_message_id = 0
 
-            # Calculate # of new messages and size of all medias
-            self._get_undownloaded_message_stat(chat.id, max_message_id)
+            sys.stdout.write('{}/{} {} Since message id:{} '.format(chat_count, chat_total, chat.name, max_message_id))
+            sys.stdout.flush()
 
-            print('{}/{} {} Messages:{} Size of files:{}'.format(chat_count, chat_total, chat.name, self._undownloaded_messages, self._undownloaded_file_bytes))
+            try:
+                # Calculate # of new messages and size of all medias
+                self._get_undownloaded_message_stat(chat.id, max_message_id)
+
+                print('Messages:{:,} Size of files:{:,}'.format(self._undownloaded_messages, self._undownloaded_file_bytes))
+            except:
+                print('Warning: Error Occurred')
+
+        # Restore display settings:
+        self._display_progress = display_progress_backup
+
+    def print_chat_info(self, allow_list=None, block_list=None):
+        # Backup original display settings
+        display_progress_backup = self._display_progress
+        self._display_progress = False
+
+        # filter chat
+        filtered_chat = self._get_filtered_chat(allow_list, block_list)
+
+        # Counters
+        chat_total = len(filtered_chat)
+        chat_count = 0
+
+        # Save all messages in all chats
+        for chat in filtered_chat:
+            chat_count += 1
+
+            sys.stdout.write('{}/{} {} '.format(chat_count, chat_total, chat.name))
+            sys.stdout.flush()
+
+            print('id:{}'.format(chat.id))
+
+        # Restore display settings:
+        self._display_progress = display_progress_backup
