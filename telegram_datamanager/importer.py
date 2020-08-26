@@ -129,6 +129,8 @@ class Importer:
         if block_list and len(block_list) is not 0:
             filtered = [chat for chat in filtered if not self._match_chat_against_list(chat, block_list)]
 
+        filtered.sort(key=lambda e: (e.name))
+
         return filtered
 
     def _get_chat_typestr(self, chat):
