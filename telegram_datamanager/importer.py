@@ -115,10 +115,7 @@ class Importer:
         # Remove dblock; Remove json from both dir and the empty work dir
         os.remove(datastore_dblock_path)
         os.remove(datastore_json_path)
-        os.remove(work_db_path)
-        os.remove(work_json_path)
-        os.rmdir(self._tmp_folder)
-        os.rmdir(self._work_folder)
+        shutil.rmtree(self._work_folder)
 
     def enable_progress(self):
         self._display_progress = True
