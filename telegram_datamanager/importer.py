@@ -51,12 +51,14 @@ class Importer:
     def _remove_file_with_invalid_media_id(self):
         self._display_callback('Removing media file with invalid id')
         # Delete all files with media_id larger than media id in the DB
-        for f in os.listdir(self._media_folder):
+        dirs = os.listdir(self._media_folder)
+        for i, f in enumerate(dirs):
+            self._display_callback(None, '{}/{} Working on folder: {}'.format(i+1, len(dirs), f))
             chat_folder = os.path.join(self._media_folder, f)
             if not os.path.isdir(chat_folder):
                 continue
-            # Convert chat_id to int
             try:
+                # Convert chat_id to int
                 chat_id = int(f)
             except ValueError:
                 continue
@@ -67,14 +69,20 @@ class Importer:
             max_media_id = self._db.chat_get_media_id(chat_id)
             # Remove all invalid files
             files_to_remove = []
-            for ff in os.listdir(chat_folder):
+            files = os.listdir(chat_folder)
+            for idx, ff in enumerate(files):
+                if idx % 100 is 0:
+                    self._display_callback(None, None, 'Checking files {}/{}'.format(idx, len(files)))
                 filepath = os.path.join(chat_folder, ff)
                 if not os.path.isfile(filepath):
                     continue
                 match = re.fullmatch(r'^([0-9]+)\@.+$', ff)
                 if match and int(match.group(1)) > max_media_id:
                     files_to_remove.append(filepath)
-            for ff in files_to_remove:
+
+            for idx, ff in enumerate(files_to_remove):
+                if idx % 100 is 0:
+                    self._display_callback(None, None, 'Removing files {}/{}'.format(idx, len(files)))
                 os.remove(ff)
 
     def _maintain_structure(self):
@@ -82,7 +90,7 @@ class Importer:
 
         os.makedirs(self._media_folder, mode=0o755, exist_ok=True)
 
-        # self._remove_file_with_invalid_media_id()
+        self._remove_file_with_invalid_media_id()
 
         # Delete and remake tmp dir
         if os.path.exists(self._tmp_folder):
