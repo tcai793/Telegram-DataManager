@@ -139,7 +139,7 @@ class Importer:
         return 'group'
 
     def _get_undownloaded_message_stat(self, chat_id, max_message_id):
-        #self._display_callback(None, 'Updating undownloaded message count')
+        self._display_callback(None, 'Updating undownloaded message count')
 
         count = 0
         total_bytes = 0
@@ -148,7 +148,7 @@ class Importer:
             count += 1
             total_bytes += self._get_media_size_in_message(message)
 
-            #self._display_callback(None, 'Updating undownloaded message count: {:,}. Total file size: {:,}'.format(count, total_bytes))
+            self._display_callback(None, 'Updating undownloaded message count: {:,}. Total file size: {:,}'.format(count, total_bytes))
 
         self._undownloaded_messages = count
         self._undownloaded_file_bytes = total_bytes
