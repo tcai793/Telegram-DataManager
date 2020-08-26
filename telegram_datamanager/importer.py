@@ -15,6 +15,7 @@ class Importer:
 
         self._tmp_folder = os.path.join(self._root_folder, 'tmp')
         self._media_folder = os.path.join(self._root_folder, 'media')
+        self._chats_folder = os.path.join(self._root_folder, 'chats')
 
         self._db = DataBase(os.path.join(db_folder, 'telegram_datamanager.db'))
 
@@ -86,16 +87,18 @@ class Importer:
                 os.remove(ff)
 
     def _maintain_structure(self):
+        # Make dirs
         os.makedirs(self._root_folder, mode=0o755, exist_ok=True)
-
         os.makedirs(self._media_folder, mode=0o755, exist_ok=True)
-
-        self._remove_file_with_invalid_media_id()
+        os.makedirs(self._chats_folder, mode=0o755, exist_ok=True)
 
         # Delete and remake tmp dir
         if os.path.exists(self._tmp_folder):
             shutil.rmtree(self._tmp_folder)
         os.makedirs(self._tmp_folder, mode=0o755, exist_ok=True)
+
+        # Remove media files with invalid id
+        self._remove_file_with_invalid_media_id()
 
     def update_personal_info(self):
         self._display_callback('Updating personal info')
@@ -249,6 +252,22 @@ class Importer:
 
         return media_ids['first'] if media_ids['first'] is not 0 else None
 
+    def _create_symlink_for_chat(self, chat_id, chat_name):
+        # Remove all folder ends with chat_id
+        for f in os.listdir(self._chats_folder):
+            matched = re.search(r"@(-?[0-9]+$)", f)
+
+            if not matched:
+                continue
+
+            if int(matched.group(1)) == chat_id:
+                os.remove(os.path.join(self._chats_folder, f))
+
+        # Create folder
+        src_folder_path = os.path.join(self._media_folder, str(chat_id))
+        dst_folder_path = os.path.join(self._chats_folder, '{}@{}'.format(chat_name, chat_id))
+        os.symlink(os.path.relpath(src_folder_path, start=self._chats_folder), dst_folder_path, target_is_directory=True)
+
     def update_chats(self, allow_list=None, block_list=None):
         self._display_callback('Updating Chats ...')
         # Step 1 filter chat
@@ -303,6 +322,8 @@ class Importer:
                 self._db.chat_update_max_id(chat.id, max_message_id)
 
                 self._db.commit()
+
+            self._create_symlink_for_chat(chat.id, chat.name)
 
     def estimate_chats(self,  allow_list=None, block_list=None):
         # Backup original display settings
