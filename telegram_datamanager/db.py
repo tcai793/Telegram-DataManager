@@ -147,14 +147,14 @@ class DataBase:
 
         self._conn.execute('UPDATE Chat SET max_message_id=? WHERE chat_id=?', (max_message_id, chat_id))
 
-    def get_media_id(self, chat_id):
+    def chat_get_media_id(self, chat_id):
         if not self.chat_exist(chat_id):
-            raise ValueError('get_next_media_id: chat_id DNE')
+            raise ValueError('chat_get_next_media_id: chat_id DNE')
 
         return self._conn.execute('SELECT media_count from Chat WHERE chat_id=?', (chat_id,)).fetchone()[0]
 
-    def get_next_media_id(self, chat_id):
-        curr_count = self.get_media_id(chat_id) + 1
+    def chat_get_next_media_id(self, chat_id):
+        curr_count = self.chat_get_media_id(chat_id) + 1
         self._conn.execute('UPDATE Chat SET media_count = ? WHERE chat_id=?', (curr_count, chat_id))
 
         return curr_count

@@ -64,7 +64,7 @@ class Importer:
             if not self._db.chat_exist(chat_id):
                 continue
             # Get max_media_id
-            max_media_id = self._db.get_media_id(chat_id)
+            max_media_id = self._db.chat_get_media_id(chat_id)
             # Remove all invalid files
             files_to_remove = []
             for ff in os.listdir(chat_folder):
@@ -82,7 +82,7 @@ class Importer:
 
         os.makedirs(self._media_folder, mode=0o755, exist_ok=True)
 
-        self._remove_file_with_invalid_media_id()
+        # self._remove_file_with_invalid_media_id()
 
         # Delete and remake tmp dir
         if os.path.exists(self._tmp_folder):
@@ -165,7 +165,7 @@ class Importer:
         self._display_callback(None, None, 'Saving media file {} '.format(os.path.basename(filename)))
 
         # Allocate media_id
-        media_id = self._db.get_next_media_id(chat_id)
+        media_id = self._db.chat_get_next_media_id(chat_id)
         # Rename and move file
         filename = os.path.basename(filename)
         new_filename = '{}@{}'.format(media_id, filename)
