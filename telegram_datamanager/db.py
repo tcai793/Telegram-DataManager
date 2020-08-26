@@ -83,6 +83,10 @@ class DataBase:
 
         self._conn = sqlite3.connect(filename)
 
+    def close(self):
+        self._conn.close()
+        return
+
     def _date_to_str(self, date):
         return date.strftime('%Y-%m-%d %H:%M:%S')
 

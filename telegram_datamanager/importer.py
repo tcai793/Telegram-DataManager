@@ -4,30 +4,121 @@ import os
 import shutil
 import sys
 import re
+import json
+from datetime import datetime
 
 
 class Importer:
-    def __init__(self, client, root_folder, db_folder, display_progress=False, display_callback=None, download_progress_callback=None):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._close_db()
+
+    def __init__(self, client, datastore_folder, work_folder, display_progress=False, display_callback=None, download_progress_callback=None):
         # Set variables
         self._client = client
 
-        self._root_folder = root_folder
+        # Data store folder
+        self._datastore_folder = datastore_folder
+        self._media_folder = os.path.join(self._datastore_folder, 'media')
+        self._chats_folder = os.path.join(self._datastore_folder, 'chats')
 
-        self._tmp_folder = os.path.join(self._root_folder, 'tmp')
-        self._media_folder = os.path.join(self._root_folder, 'media')
-        self._chats_folder = os.path.join(self._root_folder, 'chats')
+        # Working folder
+        self._work_folder = work_folder
+        self._tmp_folder = os.path.join(self._work_folder, 'tmp')
 
-        self._db = DataBase(os.path.join(db_folder, 'telegram_datamanager.db'))
+        # Make all dirs
+        self._makedirs()
 
+        self._db = self._open_db()
+
+        # Progress related
         self._display_progress = display_progress
         self._raw_display_callback = display_callback
         self._raw_download_progress_callback = download_progress_callback
 
-        # Maintain folder structure and remove useless file
-        self._maintain_structure()
+        # Remove useless file
+        self._remove_file_with_invalid_media_id()
 
         # Check and update personal info
         self.update_personal_info()
+
+    def _open_db(self):
+        # File paths
+        datastore_db_path = os.path.join(self._datastore_folder, 'telegram_datamanager.db')
+        datastore_dblock_path = os.path.join(self._datastore_folder, 'telegram_datamanager.dblock')
+        datastore_json_path = os.path.join(self._datastore_folder, 'telegram_datamanager.json')
+        work_db_path = os.path.join(self._work_folder, 'telegram_datamanager.db')
+        work_json_path = os.path.join(self._work_folder, 'telegram_datamanager.json')
+
+        # Check dblock in datastore folder
+        dblock_exist = os.path.exists(datastore_dblock_path)
+        # Check db file in work folder
+        dbfile_in_workfolder = os.path.exists(work_db_path)
+
+        if dblock_exist and not dbfile_in_workfolder:
+            print('Error: dblock exists at {} but dbfile is not at {}. Please check what is going on'.format(datastore_dblock_path, work_db_path), file=sys.stderr)
+            sys.exit(-1)
+        elif not dblock_exist and dbfile_in_workfolder:
+            print('Error: dblock is not at {} but dbfile exists at {}. Please check what is going on'.format(datastore_dblock_path, work_db_path), file=sys.stderr)
+            sys.exit(-1)
+        if dblock_exist and dbfile_in_workfolder:
+            # Check if dir and starttime match if so open this file and return
+            with open(datastore_json_path) as f:
+                datastore_json = json.load(f)
+            with open(work_json_path) as f:
+                work_json = json.load(f)
+            if not datastore_json == work_json:
+                print('Error: json file in datastore folder and work folder mismatch', file=sys.stderr)
+                print('In datastore:', file=sys.stderr)
+                print(datastore_json, file=sys.stderr)
+                print('In work:', file=sys.stderr)
+                print(work_json, file=sys.stderr)
+                sys.exit(-1)
+
+            # two json match, continue previous transaction
+            return DataBase(work_db_path)
+
+        # Normal situation
+        # Make dblock; copy db to work folder; write json to both dir
+        open(datastore_dblock_path, 'x').close()
+        shutil.copy(datastore_db_path, work_db_path)
+        info = {'datastore_folder': os.path.realpath(self._datastore_folder),
+                'work_folder': os.path.realpath(self._work_folder),
+                'start_time': datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+                }
+        with open(datastore_json_path, 'x') as f:
+            json.dump(info, f)
+        with open(work_json_path, 'x') as f:
+            json.dump(info, f)
+
+        return DataBase(work_db_path)
+
+    def _close_db(self):
+        # File paths
+        datastore_db_path = os.path.join(self._datastore_folder, 'telegram_datamanager.db')
+        datastore_dbbackup_path = os.path.join(self._datastore_folder, 'telegram_datamanager.db.backup')
+        datastore_dblock_path = os.path.join(self._datastore_folder, 'telegram_datamanager.dblock')
+        datastore_json_path = os.path.join(self._datastore_folder, 'telegram_datamanager.json')
+        work_db_path = os.path.join(self._work_folder, 'telegram_datamanager.db')
+        work_json_path = os.path.join(self._work_folder, 'telegram_datamanager.json')
+
+        # Close db file
+        self._db.close()
+
+        # Make db backup if exist in datastore; copy db from work folder
+        if os.path.exists(datastore_db_path):
+            shutil.copy(datastore_db_path, datastore_dbbackup_path)
+        shutil.copy(work_db_path, datastore_db_path)
+
+        # Remove dblock; Remove json from both dir and the empty work dir
+        os.remove(datastore_dblock_path)
+        os.remove(datastore_json_path)
+        os.remove(work_db_path)
+        os.remove(work_json_path)
+        os.rmdir(self._tmp_folder)
+        os.rmdir(self._work_folder)
 
     def enable_progress(self):
         self._display_progress = True
@@ -84,21 +175,21 @@ class Importer:
             for idx, ff in enumerate(files_to_remove):
                 if idx % 100 is 0:
                     self._display_callback(None, None, 'Removing files {}/{}'.format(idx, len(files)))
-                os.remove(ff)
+                # TODO: change back before commit
+                print('removed', file=sys.stderr)
+                # os.remove(ff)
 
-    def _maintain_structure(self):
+    def _makedirs(self):
         # Make dirs
-        os.makedirs(self._root_folder, mode=0o755, exist_ok=True)
+        os.makedirs(self._datastore_folder, mode=0o755, exist_ok=True)
         os.makedirs(self._media_folder, mode=0o755, exist_ok=True)
         os.makedirs(self._chats_folder, mode=0o755, exist_ok=True)
 
+        os.makedirs(self._work_folder, mode=0o755, exist_ok=True)
         # Delete and remake tmp dir
         if os.path.exists(self._tmp_folder):
             shutil.rmtree(self._tmp_folder)
         os.makedirs(self._tmp_folder, mode=0o755, exist_ok=True)
-
-        # Remove media files with invalid id
-        self._remove_file_with_invalid_media_id()
 
     def update_personal_info(self):
         self._display_callback('Updating personal info')
@@ -182,7 +273,7 @@ class Importer:
         new_filename = '{}@{}'.format(media_id, filename)
         old_path = os.path.join(self._tmp_folder, filename)
         new_path = os.path.join(self._media_folder, str(chat_id), new_filename)
-        os.rename(old_path, new_path)
+        shutil.move(old_path, new_path)
         # Create Media entry to db
         self._db.media_add(chat_id, media_id, new_path)
         # Update previous_entry

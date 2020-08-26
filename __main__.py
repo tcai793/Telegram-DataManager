@@ -12,8 +12,8 @@ if __name__ == '__main__':
     api_id = config['api_id']
     api_hash = config['api_hash']
     chat_names = config['chat_names']
-    root_folder = config['root_folder']
-    db_folder = config['db_folder']
+    datastore_folder = config['datastore_folder']
+    work_folder = config['work_folder']
     session_name = config['session_name']
 
     # CLI
@@ -37,6 +37,5 @@ if __name__ == '__main__':
     client = TelegramClient(session_name, api_id, api_hash)
     client.start()
 
-    im = Importer(client, root_folder, db_folder, True, display_callback, download_progress_callback)
-
-    im.update_chats(allow_list=chat_names)
+    with Importer(client, datastore_folder, work_folder, True, display_callback, download_progress_callback) as im:
+        im.update_chats(allow_list=chat_names)
