@@ -15,7 +15,7 @@ class Importer:
     def __exit__(self, exc_type, exc_value, traceback):
         self._close_db()
 
-    def __init__(self, client, datastore_folder, work_folder, display_progress=False, display_callback=None, download_progress_callback=None):
+    def __init__(self, client, datastore_folder, work_folder, display_callback=None, download_progress_callback=None, display_progress=False, create_symlink=False, check_media_ids=False):
         # Set variables
         self._client = client
 
@@ -38,8 +38,12 @@ class Importer:
         self._raw_display_callback = display_callback
         self._raw_download_progress_callback = download_progress_callback
 
-        # Remove useless file
-        self._remove_file_with_invalid_media_id()
+        # Create Symbolic Link
+        self._create_symlink = create_symlink
+
+        # Remove useless file(media id larger than max_media_id)
+        if check_media_ids:
+            self._remove_file_with_invalid_media_id()
 
         # Check and update personal info
         self.update_personal_info()
@@ -83,7 +87,7 @@ class Importer:
         # Normal situation
         # Make dblock; copy db to work folder; write json to both dir
         open(datastore_dblock_path, 'x').close()
-        shutil.copy(datastore_db_path, work_db_path)
+        shutil.copyfile(datastore_db_path, work_db_path)
         info = {'datastore_folder': os.path.realpath(self._datastore_folder),
                 'work_folder': os.path.realpath(self._work_folder),
                 'start_time': datetime.now().strftime('%Y-%m-%d %H-%M-%S')
@@ -109,8 +113,8 @@ class Importer:
 
         # Make db backup if exist in datastore; copy db from work folder
         if os.path.exists(datastore_db_path):
-            shutil.copy(datastore_db_path, datastore_dbbackup_path)
-        shutil.copy(work_db_path, datastore_db_path)
+            shutil.copyfile(datastore_db_path, datastore_dbbackup_path)
+        shutil.copyfile(work_db_path, datastore_db_path)
 
         # Remove dblock; Remove json from both dir and the empty work dir
         os.remove(datastore_dblock_path)
@@ -270,7 +274,7 @@ class Importer:
         new_filename = '{}@{}'.format(media_id, filename)
         old_path = os.path.join(self._tmp_folder, filename)
         new_path = os.path.join(self._media_folder, str(chat_id), new_filename)
-        shutil.move(old_path, new_path)
+        shutil.move(old_path, new_path, copy_function=shutil.copyfile)
         # Create Media entry to db
         self._db.media_add(chat_id, media_id, new_path)
         # Update previous_entry
@@ -349,12 +353,19 @@ class Importer:
                 continue
 
             if int(matched.group(1)) == chat_id:
-                os.remove(os.path.join(self._chats_folder, f))
+                folder_path = os.path.join(self._chats_folder, f)
+                if os.path.islink(folder_path):
+                    os.remove(folder_path)
+                else:
+                    os.rmdir(folder_path)
 
         # Create folder
         src_folder_path = os.path.join(self._media_folder, str(chat_id))
         dst_folder_path = os.path.join(self._chats_folder, '{}@{}'.format(chat_name, chat_id))
-        os.symlink(os.path.relpath(src_folder_path, start=self._chats_folder), dst_folder_path, target_is_directory=True)
+        if self._create_symlink:
+            os.symlink(os.path.relpath(src_folder_path, start=self._chats_folder), dst_folder_path, target_is_directory=True)
+        else:
+            os.mkdir(dst_folder_path, mode=0o755)
 
     def update_chats(self, allow_list=None, block_list=None):
         self._display_callback('Updating Chats ...')

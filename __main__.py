@@ -37,5 +37,5 @@ if __name__ == '__main__':
     client = TelegramClient(session_name, api_id, api_hash)
     client.start()
 
-    with Importer(client, datastore_folder, work_folder, True, display_callback, download_progress_callback) as im:
+    with Importer(client, datastore_folder, work_folder, display_callback, download_progress_callback, True) as im:
         im.update_chats(allow_list=chat_names)
