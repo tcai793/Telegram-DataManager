@@ -289,7 +289,8 @@ class Importer:
         total_bytes = 0
 
         if isinstance(message.media, types.MessageMediaPhoto):
-            total_bytes += message.media.photo.sizes[-1].size
+            if isinstance(message.media.photo.sizes[-1], types.PhotoSize):
+                total_bytes += message.media.photo.sizes[-1].size
 
         if isinstance(message.media, types.MessageMediaDocument):
             total_bytes += message.media.document.size
@@ -308,7 +309,8 @@ class Importer:
                 # Download all photos
                 if message.web_preview.cached_page.photos:
                     for photo in message.web_preview.cached_page.photos:
-                        total_bytes += photo.sizes[-1].size
+                        if isinstance(photo.sizes[-1], types.PhotoSize):
+                            total_bytes += photo.sizes[-1].size
 
                 # Download all documents
                 if message.web_preview.cached_page.documents:
@@ -425,10 +427,9 @@ class Importer:
             self._create_symlink_for_chat(chat.id, chat.name)
 
     def estimate_chats(self,  allow_list=None, block_list=None):
-        # Backup original display settings
-        display_progress_backup = self._display_progress
-        self._display_progress = False
-
+        # File locations
+        json_path = os.path.join(self._datastore_folder, 'chat_estimate.json')
+        txt_path = os.path.join(self._datastore_folder, 'chat_estimate.txt')
         # filter chat
         filtered_chat = self._get_filtered_chat(allow_list, block_list)
 
@@ -436,9 +437,26 @@ class Importer:
         chat_total = len(filtered_chat)
         chat_count = 0
 
+        # Try to open previous result
+        if os.path.exists(json_path):
+            with open(json_path) as f:
+                result = json.load(f)
+        else:
+            result = []
+
         # Save all messages in all chats
         for chat in filtered_chat:
+            self._display_callback('Updating Chat {} {:,}/{:,}'.format(chat.name, chat_count, chat_total))
             chat_count += 1
+
+            # Don't redo work
+            jump = False
+            for entry in result:
+                if chat.id == entry[0]:
+                    jump = True
+                    break
+            if jump:
+                continue
 
             # Get max downloaded message id
             if self._db.chat_exist(chat.id):
@@ -446,19 +464,21 @@ class Importer:
             else:
                 max_message_id = 0
 
-            sys.stdout.write('{}/{} {} Since message id:{} '.format(chat_count, chat_total, chat.name, max_message_id))
-            sys.stdout.flush()
+            # Calculate # of new messages and size of all medias
+            self._get_undownloaded_message_stat(chat.id, max_message_id)
 
-            try:
-                # Calculate # of new messages and size of all medias
-                self._get_undownloaded_message_stat(chat.id, max_message_id)
+            result.append((chat.id, chat.name, max_message_id, self._undownloaded_messages, self._undownloaded_file_bytes))
 
-                print('Messages:{:,} Size of files:{:,}'.format(self._undownloaded_messages, self._undownloaded_file_bytes))
-            except:
-                print('Warning: Error Occurred')
+            result.sort(key=lambda x: x[1])
 
-        # Restore display settings:
-        self._display_progress = display_progress_backup
+            # Save partial result
+            with open(os.path.join(self._datastore_folder, 'chat_estimate.json'), 'w', encoding='utf-8') as f:
+                json.dump(result, f, ensure_ascii=False)
+
+        # Save final result
+        with open(os.path.join(self._datastore_folder, 'chat_estimate.txt'), 'w') as f:
+            for entry in result:
+                f.write('{1}@{0} Since message id:{2} Messages:{3:,} Size of files:{4:,}\n'.format(*entry))
 
     def print_chat_info(self, allow_list=None, block_list=None):
         # Backup original display settings
