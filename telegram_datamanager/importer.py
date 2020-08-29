@@ -261,6 +261,9 @@ class Importer:
     def _get_actionstr(self, message):
         return type(message.action).__name__ if message.action else None
 
+    # If filename is None, then no file to move
+    # If filename is -1, then download failed, save None to DB
+    # Else move the file and store file path to db
     def _move_media_file(self, chat_id, filename, media_ids):
         if not filename:
             return
@@ -270,11 +273,14 @@ class Importer:
         # Allocate media_id
         media_id = self._db.chat_get_next_media_id(chat_id)
         # Rename and move file
-        filename = os.path.basename(filename)
-        new_filename = '{}@{}'.format(media_id, filename)
-        old_path = os.path.join(self._tmp_folder, filename)
-        new_path = os.path.join(self._media_folder, str(chat_id), new_filename)
-        shutil.move(old_path, new_path, copy_function=shutil.copyfile)
+        if filename != -1:
+            filename = os.path.basename(filename)
+            new_filename = '{}@{}'.format(media_id, filename)
+            old_path = os.path.join(self._tmp_folder, filename)
+            new_path = os.path.join(self._media_folder, str(chat_id), new_filename)
+            shutil.move(old_path, new_path, copy_function=shutil.copyfile)
+        else:
+            new_path = None
         # Create Media entry to db
         self._db.media_add(chat_id, media_id, new_path)
         # Update previous_entry
@@ -327,7 +333,10 @@ class Importer:
         # Download everything
         media_ids = {'first': 0, 'prev': 0}
         # Step 1: media in document
-        filename = message.download_media(file=self._tmp_folder, progress_callback=self._download_progress_callback)
+        try:
+            filename = message.download_media(file=self._tmp_folder, progress_callback=self._download_progress_callback)
+        except ValueError:
+            filename = -1
         self._move_media_file(chat_id, filename, media_ids)
 
         if message.web_preview:
@@ -335,13 +344,19 @@ class Importer:
                 # Download all photos
                 if message.web_preview.cached_page.photos:
                     for photo in message.web_preview.cached_page.photos:
-                        filename = message.client.download_media(photo, file=self._tmp_folder, progress_callback=self._download_progress_callback)
+                        try:
+                            filename = message.client.download_media(photo, file=self._tmp_folder, progress_callback=self._download_progress_callback)
+                        except ValueError:
+                            filename = -1
                         self._move_media_file(chat_id, filename, media_ids)
 
                 # Download all documents
                 if message.web_preview.cached_page.documents:
                     for doc in message.web_preview.cached_page.documents:
-                        filename = message.client.download_media(doc, file=self._tmp_folder, progress_callback=self._download_progress_callback)
+                        try:
+                            filename = message.client.download_media(doc, file=self._tmp_folder, progress_callback=self._download_progress_callback)
+                        except ValueError:
+                            filename = -1
                         self._move_media_file(chat_id, filename, media_ids)
 
         return media_ids['first'] if media_ids['first'] is not 0 else None
