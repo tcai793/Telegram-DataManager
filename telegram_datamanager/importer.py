@@ -217,7 +217,7 @@ class Importer:
 
     def _get_filtered_chat(self, allow_list=None, block_list=None):
         self._display_callback(None, 'Filtering Chat')
-        all_chats = self._client.get_dialogs(limit=None)
+        all_chats = self._client.get_dialogs(limit=None, ignore_migrated=True)
 
         filtered = []
 
