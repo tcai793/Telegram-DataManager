@@ -123,7 +123,7 @@ class Folders:
                 print('\t{}'.format(self.get_name_from_id(dialog_id)))
             print()
 
-    def generate_dialog_to_folder_map(self, ignored_list=[]):
+    def generate_dialog_to_folder_map(self, ignored_list=None):
         if self.folders == []:
             self.update()
 
@@ -136,7 +136,7 @@ class Folders:
 
         # Process
         for folder in self.folders:
-            if folder.name in ignored_list:
+            if folder.name in ignored_list or folder.id in ignored_list:
                 continue
 
             for dialog_id in folder.peer_ids:
@@ -152,7 +152,7 @@ class Folders:
 
         return entity.title
 
-    def print_dialog_to_folder_map(self, ignored_list=[]):
+    def print_dialog_to_folder_map(self, ignored_list=None):
         m = self.generate_dialog_to_folder_map(ignored_list)
 
         for dialog_id in m.keys():
@@ -160,3 +160,11 @@ class Folders:
             for folder in m[dialog_id]:
                 print('\t', folder.name)
             print()
+
+    def check_all_dialog_in_one_folder(self, ignored_folder_list=[]):
+        dtf = self.generate_dialog_to_folder_map(ignored_folder_list)
+        for d in dtf.keys():
+            if len(dtf[d]) != 1:
+                print('Dialog {} is in {} folder(s)'.format(self.get_name_from_id(d), len(dtf[d])))
+                for f in dtf[d]:
+                    print('\t{}'.format(f.name))
