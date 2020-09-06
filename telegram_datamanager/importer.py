@@ -215,26 +215,26 @@ class Importer:
     def _match_chat_against_list(self, chat, compared_list):
         return int(chat.id) in compared_list or chat.name in compared_list
 
-    def _get_filtered_chat(self, allow_list=None, block_list=None):
+    def _get_matched_chat(self, allow_list=None, block_list=None):
         self._display_callback(None, 'Filtering Chat')
         all_chats = self._client.get_dialogs(limit=None, ignore_migrated=True)
 
-        filtered = []
+        matched = []
 
         if allow_list and len(allow_list) is not 0:
             for chat in all_chats:
                 if self._match_chat_against_list(chat, allow_list):
-                    filtered.append(chat)
+                    matched.append(chat)
         else:
             for chat in all_chats:
-                filtered.append(chat)
+                matched.append(chat)
 
         if block_list and len(block_list) is not 0:
-            filtered = [chat for chat in filtered if not self._match_chat_against_list(chat, block_list)]
+            matched = [chat for chat in matched if not self._match_chat_against_list(chat, block_list)]
 
-        filtered.sort(key=lambda e: (e.name))
+        matched.sort(key=lambda e: (e.name))
 
-        return filtered
+        return matched
 
     def _get_chat_typestr(self, chat):
         if chat.is_user:
@@ -384,18 +384,46 @@ class Importer:
         else:
             os.mkdir(dst_folder_path, mode=0o755)
 
+    def _filter_chat_with_new_content(self, chat_list):
+        self._display_callback('Check if chat has new contents ...')
+
+        filtered = []
+
+        # Counters
+        chat_total = len(chat_list)
+        chat_count = 1
+
+        for chat in chat_list:
+            self._display_callback('Checking Chat {} {:,}/{:,}'.format(chat.name, chat_count, chat_total))
+            chat_count += 1
+
+            # Check if chat is in db, if not, create it
+            if not self._db.chat_exist(chat.id):
+                self._db.chat_add(chat.id, chat.name, self._get_chat_typestr(chat))
+                self._db.commit()
+
+            # Get max downloaded message id
+            max_message_id = self._db.chat_get_max_id(chat.id)
+
+            if len(self._client.get_messages(chat.id, reverse=True, min_id=max_message_id)) > 0:
+                filtered.append(chat)
+
+        return filtered
+
     def update_chats(self, allow_list=None, block_list=None):
         self._display_callback('Updating Chats ...')
         # Step 1 filter chat
-        filtered_chat = self._get_filtered_chat(allow_list, block_list)
+        matched_chat_list = self._get_matched_chat(allow_list, block_list)
+        filtered_chat = self._filter_chat_with_new_content(matched_chat_list)
 
         # Counters
         chat_total = len(filtered_chat)
+        ignored_chats = len(matched_chat_list) - chat_total
         chat_count = 1
 
         # Save all messages in all chats
         for chat in filtered_chat:
-            self._display_callback('Updating Chat {} {:,}/{:,}'.format(chat.name, chat_count, chat_total))
+            self._display_callback('Updating Chat {} {:,}/{:,}. {} Chats ignored because no new message'.format(chat.name, chat_count, chat_total, ignored_chats))
             chat_count += 1
             # Check if chat is in db, if not, create it
             if not self._db.chat_exist(chat.id):
@@ -441,15 +469,17 @@ class Importer:
 
             self._create_symlink_for_chat(chat.id, chat.name)
 
+    # TODO Modify
     def estimate_chats(self,  allow_list=None, block_list=None):
         # File locations
         json_path = os.path.join(self._datastore_folder, 'chat_estimate.json')
         txt_path = os.path.join(self._datastore_folder, 'chat_estimate.txt')
-        # filter chat
-        filtered_chat = self._get_filtered_chat(allow_list, block_list)
+
+        # match chat against allow & block list
+        matched_chat_list = self._get_matched_chat(allow_list, block_list)
 
         # Counters
-        chat_total = len(filtered_chat)
+        chat_total = len(matched_chat_list)
         chat_count = 0
 
         # Try to open previous result
@@ -460,7 +490,7 @@ class Importer:
             result = []
 
         # Save all messages in all chats
-        for chat in filtered_chat:
+        for chat in matched_chat_list:
             self._display_callback('Updating Chat {} {:,}/{:,}'.format(chat.name, chat_count, chat_total))
             chat_count += 1
 
@@ -500,15 +530,15 @@ class Importer:
         display_progress_backup = self._display_progress
         self._display_progress = False
 
-        # filter chat
-        filtered_chat = self._get_filtered_chat(allow_list, block_list)
+        # match chat against allow & block list
+        matched_chat_list = self._get_matched_chat(allow_list, block_list)
 
         # Counters
-        chat_total = len(filtered_chat)
+        chat_total = len(matched_chat_list)
         chat_count = 0
 
         # Save all messages in all chats
-        for chat in filtered_chat:
+        for chat in matched_chat_list:
             chat_count += 1
 
             sys.stdout.write('{}/{} {} '.format(chat_count, chat_total, chat.name))
