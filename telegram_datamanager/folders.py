@@ -170,7 +170,7 @@ class Folders:
                     print('\t{}'.format(f.name))
 
     def get_dialog_ids_from_folder(self, include_folder_list=None):
-        ids = set()
+        ids = []
 
         if include_folder_list is None:
             return ids
@@ -181,6 +181,6 @@ class Folders:
         for folder in self.folders:
             if folder.name in include_folder_list or folder.id in include_folder_list:
                 for peer_id in folder.peer_ids:
-                    ids.add(peer_id)
+                    ids.append(peer_id)
 
         return ids
