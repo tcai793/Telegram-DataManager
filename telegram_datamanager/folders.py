@@ -18,7 +18,7 @@ class Folder:
 class Folders:
     def __init__(self, client):
         self._client = client
-        self.folders = []
+        self.folders = list()
 
     def __str__(self):
         ret = ""
@@ -161,10 +161,26 @@ class Folders:
                 print('\t', folder.name)
             print()
 
-    def check_all_dialog_in_one_folder(self, ignored_folder_list=[]):
+    def check_all_dialog_in_one_folder(self, ignored_folder_list=None):
         dtf = self.generate_dialog_to_folder_map(ignored_folder_list)
         for d in dtf.keys():
             if len(dtf[d]) != 1:
                 print('Dialog {} is in {} folder(s)'.format(self.get_name_from_id(d), len(dtf[d])))
                 for f in dtf[d]:
                     print('\t{}'.format(f.name))
+
+    def get_dialog_ids_from_folder(self, include_folder_list=None):
+        ids = set()
+
+        if include_folder_list is None:
+            return ids
+
+        if self.folders == []:
+            self.update()
+
+        for folder in self.folders:
+            if folder.name in include_folder_list or folder.id in include_folder_list:
+                for peer_id in folder.peer_ids:
+                    ids.add(peer_id)
+
+        return ids
